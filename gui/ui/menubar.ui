@@ -2,8 +2,21 @@
 <interface>
     <menu id="menubar">
         <submenu>
-            <attribute name="label">file</attribute>
+            <attribute name="label">File</attribute>
             <section>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Save Workspace</attribute>
+                    <attribute name="accel">&lt;Primary&gt;s</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Load Workspace</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Close Current Tab</attribute>
+                </item>
                 <item>
                     <attribute name="action">app.quit</attribute>
                     <attribute name="label" translatable="yes">_Quit</attribute>
@@ -12,7 +25,7 @@
             </section>
         </submenu>
         <submenu>
-            <attribute name="label">automata</attribute>
+            <attribute name="label">Automata</attribute>
             <section>
                 <item>
                     <attribute name="action">app.new</attribute>
@@ -33,6 +46,48 @@
                     <attribute name="action">app.edit</attribute>
                     <attribute name="label" translatable="yes">_Edit</attribute>
                     <attribute name="accel">&lt;Primary&gt;l</attribute>
+                </item>
+            </section>
+        </submenu>
+        <submenu>
+            <attribute name="label">Templates</attribute>
+            <section>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Alternate</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Alternate Finish</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Mutual Exclusion</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Mutual Exclusion 2</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Strong Couple</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Minimum Occorrences</attribute>
+                </item>
+            </section>
+        </submenu>
+        <submenu>
+            <attribute name="label">Options</attribute>
+            <section>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Set Radius Factor</attribute>
+                </item>
+                <item>
+                    <attribute name="action"></attribute>
+                    <attribute name="label" translatable="yes">_Enumerate States</attribute>
                 </item>
             </section>
         </submenu>
