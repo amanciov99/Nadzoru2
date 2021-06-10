@@ -150,7 +150,6 @@ class State(Base):
 
     def transition_out_remove(self, transition):
         self.out_transitions.discard(transition)
-        self.transition_layouts[transition.to_state].dec_ref()
         if self.transition_layouts[transition.to_state].ref_count == 0:
             del self.transition_layouts[transition.to_state]
 
@@ -312,6 +311,18 @@ class Automaton(Base):
 
     # TODO: test
     def state_remove(self, state):
+        if self.initial_state == state:
+            self.initial_state = None
+        in_transitions = set()
+        for r in state.in_transitions:
+            in_transitions.add(r)
+        out_transitions = set()
+        for r in state.out_transitions:
+            out_transitions.add(r)
+        for transition in in_transitions:
+            self.transition_remove(transition)
+        for transition in out_transitions:
+            self.transition_remove(transition)
         try:
             self.states.remove(state)
         except KeyError:
@@ -319,10 +330,6 @@ class Automaton(Base):
         else:
             if self.initial_state == state:
                 self.initial_state = None
-            for t in state.in_transitions:
-                self.transition_remove(t)
-            for t in state.out_transitions:
-                self.transition_remove(t)
             return True
 
     @property
@@ -429,10 +436,15 @@ class Automaton(Base):
         if(accessible_states == states_number):
             return self
 
+        non_acessible_states_set = set()
         """Remove non-acessible states"""
         for state, is_accessible in states_dict.items():
             if is_accessible == False:
-                self.state_remove(state)
+                non_acessible_states_set.add(state)
+
+        for each in non_acessible_states_set:
+            self.state_remove(each)
+
         return self
 
     def is_coaccessible(self):
@@ -478,10 +490,14 @@ class Automaton(Base):
         if (coaccessible_states == states_number):
             return self
 
+        non_coacessible_state_set = set()
         """Remove non-coacessible states"""
         for state, is_coaccessible in states_dict.items():
             if is_coaccessible == False:
-                self.state_remove(state)
+                non_coacessible_state_set.add(state)
+
+        for each in non_coacessible_state_set:
+            self.state_remove(each)
 
         return self
 
@@ -686,15 +702,24 @@ class Automaton(Base):
         for state in self.states:
             original_automaton_dict[state.name] = state
 
-        def determinize_state(state):
-            transition_function = dict()
+        def get_transition_function(state, transition_function):
             for transition in original_automaton_dict[state.name].out_transitions:
                 if transition.event in transition_function:
                     if not isinstance(transition_function[transition.event], list):
-                        transition_function[transition.event] = [transition_function[transition.event]]
-                    transition_function[transition.event].append(transition.to_state)
+                        if transition_function[transition.event] != transition.to_state:
+                            transition_function[transition.event] = [transition_function[transition.event]]
+                            transition_function[transition.event].append(transition.to_state)
                 else:
                     transition_function[transition.event] = transition.to_state
+            return transition_function
+
+        def determinize_state(state, from_state):
+            transition_function = dict()
+            if type(state) == frozenset:
+                for each in state:
+                    transition_function = get_transition_function(each, transition_function)
+            else:
+                transition_function = get_transition_function(state, transition_function)
             for key in transition_function.keys():
                 if not isinstance(transition_function[key], list):
                     try:
@@ -717,22 +742,14 @@ class Automaton(Base):
                         state_stack.append(frozen_set)
                 if key not in events_set:
                     events_set.add(det_automaton.event_add(key.name, key.controllable,key.observable))
-                det_automaton.transition_add(state, next_state, key)
+                det_automaton.transition_add(from_state, next_state, key)
 
         while len(state_stack) != 0:
             state = state_stack.pop(0)
             if type(state) == frozenset:
-                for item in state:
-                    determinize_state(item)
-                selfloop = set()
-                for transition in created_states_dict[state].in_transitions:
-                    if transition not in selfloop:
-                        selfloop.add(transition.event)
-                for ev in selfloop:
-                    det_automaton.transition_add(created_states_dict[state], created_states_dict[state], ev)
+                determinize_state(state, created_states_dict[state])
             else:
-                determinize_state(created_states_dict[state])
-
+                determinize_state(created_states_dict[state], created_states_dict[state])
 
         return det_automaton
 
@@ -743,7 +760,107 @@ class Automaton(Base):
         pass
 
     def minimize(self, copy=False):
-        pass
+
+        state_list = list(self.states)
+        event_set = set(self.events)
+        dict_x = dict()
+        dict_y = dict()
+        marked_matrix = list(list(False for index_y in range(index_x + 1, len(state_list))) for index_x in range(0, len(state_list) - 1))
+
+        def transition_already_exists(from_state, to_state, ev):
+            for t in from_state.out_transitions:
+                if t.to_state == to_state and t.event == ev:
+                    return True
+            return False
+
+        for index_x in range(0, len(state_list) - 1):
+            dict_x[state_list[index_x]] = index_x
+            for index_y in range(index_x + 1, len(state_list)):
+                dict_y[state_list[index_y]] = index_y - 1
+
+        for state_x in dict_x.keys():
+            for state_y in dict_y.keys():
+                if dict_y[state_y] >= dict_x[state_x] and state_x.marked != state_y.marked:
+                    marked_matrix[dict_x[state_x]][dict_y[state_y] - dict_x[state_x]] = True
+
+        #TODO: determine how many times it has to loop - maybe half of matrix is enough
+        for i in range(0, len(marked_matrix)):
+            for state_x in dict_x.keys():
+                for state_y in dict_y.keys():
+                    if dict_y[state_y] >= dict_x[state_x]:
+                        if state_x == state_y:
+                            marked_matrix[dict_x[state_x]][dict_y[state_y] - dict_x[state_x]] = True
+                        elif not marked_matrix[dict_x[state_x]][dict_y[state_y] - dict_x[state_x]]:
+                            to_state_x = state_x
+                            to_state_y = state_y
+                            for event in event_set:
+                                for transition in state_x.out_transitions:
+                                    if transition.event.name == event:
+                                        to_state_x = transition.to_state
+                                        break
+                                for transition in state_y.out_transitions:
+                                    if transition.event.name == event:
+                                        to_state_y = transition.to_state
+                                        break
+                                if to_state_y != to_state_x:
+                                    try:
+                                        if dict_y[to_state_y] >= dict_x[to_state_x]:
+                                            if marked_matrix[dict_x[to_state_x]][dict_y[to_state_y] - dict_x[to_state_x]]:
+                                                marked_matrix[dict_x[state_x]][dict_y[state_y] - dict_x[state_x]] = True
+                                        elif dict_y[to_state_x] >= dict_x[to_state_y]:
+                                            if marked_matrix[dict_x[to_state_y]][dict_y[to_state_x] - dict_x[to_state_y]]:
+                                                marked_matrix[dict_x[state_x]][dict_y[state_y] - dict_x[state_x]] = True
+                                    except KeyError:
+                                        if dict_y[to_state_x] >= dict_x[to_state_y]:
+                                            if marked_matrix[dict_x[to_state_y]][dict_y[to_state_x] - dict_x[to_state_y]]:
+                                                marked_matrix[dict_x[state_x]][dict_y[state_y] - dict_x[state_x]] = True
+                                        elif dict_y[to_state_y] >= dict_x[to_state_x]:
+                                            if marked_matrix[dict_x[to_state_x]][dict_y[to_state_y] - dict_x[to_state_x]]:
+                                                marked_matrix[dict_x[state_x]][dict_y[state_y] - dict_x[state_x]] = True
+
+        equivalences = set()
+        for row in range(0, len(marked_matrix)):
+            state_equivalent = set()
+            for column in range(0, len(marked_matrix[row])):
+                if not marked_matrix[row][column]:
+                    state_equivalent.add(state_list[row + column + 1])
+            if len(state_equivalent) > 0:
+                state_equivalent.add(state_list[row])
+                equivalences.add(frozenset(state_equivalent))
+
+        states_to_remove = set()
+
+        for eq in equivalences:
+            state_name = ",".join(each.name for each in eq)
+            is_initial = False
+            for each in eq:
+                if each == self.initial_state:
+                    is_initial = True
+                    break
+            is_marked = False
+            for each in eq:
+                if each.marked:
+                    is_marked = True
+                    break
+            equivalent_state = self.state_add(state_name, marked=is_marked, initial=is_initial)
+            for state in self.states:
+                if state in eq:
+                    for transition in state.in_transitions:
+                        if transition.from_state == transition.to_state and not transition_already_exists(equivalent_state, equivalent_state, transition.event):
+                            self.transition_add(equivalent_state, equivalent_state, transition.event)
+                        elif not transition_already_exists(transition.from_state, equivalent_state, transition.event):
+                            self.transition_add(transition.from_state, equivalent_state, transition.event)
+                    for transition in state.out_transitions:
+                        if transition.from_state == transition.to_state and not transition_already_exists(equivalent_state, equivalent_state, transition.event):
+                            self.transition_add(equivalent_state, equivalent_state, transition.event)
+                        elif not transition_already_exists(equivalent_state, transition.to_state, transition.event):
+                            self.transition_add(equivalent_state, transition.to_state, transition.event)
+                    states_to_remove.add(state)
+
+        for each in states_to_remove:
+            self.state_remove(each)
+
+        return self
 
     def mask(self, masks, copy=False):
         pass
